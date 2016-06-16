@@ -8,6 +8,7 @@ ROUNDS = 100000
 SHOE_SIZE = 8
 SHOE_PENETRATION = 0.2
 DECK_SIZE = 52.0
+PLAYER_COUNT = 6
 CARDS = {"Ace": 11, "Two": 2, "Three": 3, "Four": 4, "Five": 5, "Six": 6, "Seven": 7, "Eight": 8, "Nine": 9, "Ten": 10, "Jack": 10, "Queen": 10, "King": 10}
 
 HARD_STRATEGY = {}
@@ -285,15 +286,31 @@ if __name__ == "__main__":
     for i in range(ROUNDS):
         print "############################################################ GAME no. %d ############################################################" % (i + 1)
 
-        player_hand = Hand([shoe.deal(), shoe.deal()])
-        dealer_hand = Hand([shoe.deal()])
-        player = Player(player_hand, dealer_hand, shoe)
-        dealer = Dealer(dealer_hand, shoe)
-        print "Dealer Hand: %s" % dealer.hand
-        print "Player Hand: %s\n" % player.hands[0]
-    
-        player.play()
-        dealer.play()
+        players = []
+        starting_cards = []
+        dealer_cards = []
+        for index in xrange(PLAYER_COUNT):
+            starting_cards.append([])
+
+        for card_count in xrange(2):
+            for index in xrange(PLAYER_COUNT):
+                starting_cards[index].append(shoe.deal())
+            dealer_cards.append(shoe.deal())
+
+        dealer_hand = Hand(dealer_cards)
+        if not dealer_hand.blackjack():
+            # Play only continues if dealer does not have Blackjack
+            dealer = Dealer(dealer_hand, shoe)
+            for index in xrange(PLAYER_COUNT):
+                player_hand = Hand(starting_cards[index])
+                players.append(Player(player_hand, dealer_hand, shoe))
+
+            print "Dealer Hand: %s" % dealer.hand
+            # print "Player Hand: %s\n" % player.hands[0]
+
+            for player in players:
+                player.play()
+            dealer.play()
     
         print ""
         for hand in player.hands:
