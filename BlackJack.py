@@ -1,11 +1,11 @@
 import sys
-from random import shuffle
+from random import shuffle, uniform
 
 from importer.StrategyImporter import StrategyImporter
 
 
-ROUNDS = 100000
-SHOE_SIZE = 8
+ROUNDS = 1
+SHOE_SIZE = 6
 SHOE_PENETRATION = 0.2
 DECK_SIZE = 52.0
 PLAYER_COUNT = 6
@@ -37,6 +37,7 @@ class Shoe(object):
     def __init__(self, decks):
         self.decks = decks
         self.cards = self.init_cards()
+        self.penetration_threshold = uniform(0.15, 0.25)
 
     def __str__(self):
         s = ""
@@ -61,7 +62,7 @@ class Shoe(object):
         Returns:    The next card off the shoe. If the shoe penetration is reached,
                     the shoe gets reshuffled.
         """
-        if (len(self.cards) / (DECK_SIZE * self.decks)) < SHOE_PENETRATION:
+        if (len(self.cards) / (DECK_SIZE * self.decks)) < self.penetration_threshold:
             self.reshuffle = True
         return self.cards.pop()
 
@@ -147,12 +148,10 @@ class Hand(object):
 
     def blackjack(self):
         """
-        Check a hand for a blackjack. Note: 3x7 is also counted as a blackjack.
+        Check a hand for a blackjack.
         """
-        if not self.splithand and self.value == 21:
-            if all(c.value == 7 for c in self.cards):
-                return True
-            elif self.length() == 2:
+        if self.value == 21:
+            if self.length() == 2:
                 return True
             else:
                 return False
