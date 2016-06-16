@@ -16,6 +16,8 @@ SHOE_PENETRATION = 0.05
 BET_SPREAD = 20.0
 
 DECK_SIZE = 52.0
+CARDS_PER_HAND = 2
+PLAYER_COUNT = 6
 CARDS = {"Ace": 11, "Two": 2, "Three": 3, "Four": 4, "Five": 5, "Six": 6, "Seven": 7, "Eight": 8, "Nine": 9, "Ten": 10, "Jack": 10, "Queen": 10, "King": 10}
 BASIC_OMEGA_II = {"Ace": 0, "Two": 1, "Three": 1, "Four": 2, "Five": 2, "Six": 2, "Seven": 1, "Eight": 0, "Nine": -1, "Ten": -2, "Jack": -2, "Queen": -2, "King": -2}
 
@@ -317,11 +319,14 @@ class Game(object):
     """
     A sequence of Blackjack Rounds that keeps track of total money won or lost
     """
-    def __init__(self):
+    def __init__(self, player_count):
         self.shoe = Shoe(SHOE_SIZE)
-        self.money = 0.0
+        self.player_moneys = [0.0] * player_count
         self.stake = 1.0
-        self.player = Player()
+        self.player_count = player_count
+        self.players = []
+        for _ in range(player_count):
+            self.players.append(Player())
         self.dealer = Dealer()
 
     def get_hand_winnings(self, hand):
@@ -370,22 +375,37 @@ class Game(object):
         else:
             self.stake = 1.0
 
-        player_hand = Hand([self.shoe.deal(), self.shoe.deal()])
-        dealer_hand = Hand([self.shoe.deal()])
-        self.player.set_hands(player_hand, dealer_hand)
-        self.dealer.set_hand(dealer_hand)
-        # print "Dealer Hand: %s" % self.dealer.hand
-        # print "Player Hand: %s\n" % self.player.hands[0]
+        # Deal the starting cards for each hand
+        dealer_cards = []
+        starting_cards = []
+        for _ in range(self.player_count):
+            starting_cards.append([])
 
-        self.player.play(self.shoe)
-        self.dealer.play(self.shoe)
+        for card_count in range(CARDS_PER_HAND):
+            for i in range(self.player_count):
+                starting_cards[i].append(self.shoe.deal())
+            dealer_cards.append(self.shoe.deal())
+
+        dealer_hand = Hand(dealer_cards)
+        self.dealer.set_hand(dealer_hand)
+
+        # Play out the Round only if dealer does not have Blackjack
+        if not dealer_hand.blackjack():
+            for i in range(self.player_count):
+                player_hand = Hand(starting_cards[i])
+                # print "Player {id}'s Hand: {hand}".format(id=i+1, hand=player_hand)
+                self.players[i].set_hands(player_hand, dealer_hand)
+                self.players[i].play(self.shoe)
+            self.dealer.play(self.shoe)
 
         # print ""
-        
-        for hand in self.player.hands:
-            win = self.get_hand_winnings(hand)
-            self.money += win
-            # print "Player Hand: %s %s (Value: %d, Busted: %r, BlackJack: %r, Splithand: %r, Soft: %r, Surrender: %r, Doubled: %r)" % (hand, status, hand.value, hand.busted(), hand.blackjack(), hand.splithand, hand.soft(), hand.surrender, hand.doubled)
+
+        # Calculate the winnings for each player
+        for i in range(self.player_count):
+            for hand in self.players[i].hands:
+                win = self.get_hand_winnings(hand)
+                self.player_moneys[i] += win
+                # print "Player %d Hand: %s %s (Value: %d, Busted: %r, BlackJack: %r, Splithand: %r, Soft: %r, Surrender: %r, Doubled: %r)" % (i + 1, hand, status, hand.value, hand.busted(), hand.blackjack(), hand.splithand, hand.soft(), hand.surrender, hand.doubled)
         
         # print "Dealer Hand: %s (%d)" % (self.dealer.hand, self.dealer.hand.value)
 
@@ -393,39 +413,40 @@ class Game(object):
             self.shoe.reshuffle = False
             self.shoe.cards = self.shoe.init_cards()
 
-    def get_money(self):
-        return self.money    
+    def get_moneys(self):
+        return self.player_moneys
 
 
 if __name__ == "__main__":
     importer = StrategyImporter(sys.argv[1])
     HARD_STRATEGY, SOFT_STRATEGY, PAIR_STRATEGY = importer.import_player_strategy()
 
-    moneys = []
+    game_money_stats = []
+    player_winnings = [0.0] * PLAYER_COUNT
     countings = []
 
     for g in range(GAMES):
-        game = Game()
+        game = Game(PLAYER_COUNT)
 
         for i in range(ROUNDS_PER_GAME):
             # print '%s GAME no. %d %s' % (20 * '#', i + 1, 20 * '#')
             game.play_round()
 
-        moneys.append(game.get_money())
         countings += game.shoe.count_history
 
-        print "WIN for Game no. %d: %f" % (g + 1, game.get_money())
+        for i, money in enumerate(game.get_moneys()):
+            player_winnings[i] += money
+            game_money_stats.append(money)
+            print "WIN for Game no. %d, Player %d: %f" % (g + 1, i + 1, money)
 
-    sume = 0.0
-    for value in moneys:
-        sume += value
-    print "Overall: %f" % sume
+    for i in range(PLAYER_COUNT):
+        print "Overall for player %d: %f" % (i + 1, player_winnings[i])
 
-    moneys = sorted(moneys)
+    moneys = sorted(game_money_stats)
     fit = stats.norm.pdf(moneys, np.mean(moneys), np.std(moneys))  #this is a fitting indeed
     pl.plot(moneys,fit,'-o')
     pl.hist(moneys,normed=True) #use this to draw histogram of your data
-    pl.show()                   #use may also need add this 
+    pl.show()                   #use may also need add this
 
     plt.ylabel('count')
     plt.plot(countings, label='x')

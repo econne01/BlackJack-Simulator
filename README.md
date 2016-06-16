@@ -24,7 +24,7 @@ The simulator involves several concepts related to Blackjack game play.
 
 ### Result
 
-The simulator provides the net winnings result per game played and an overall result summing up all the game results. The following output for example  indicates, that in game no. 67 the simulated player won 18 hands more than he lost. On the other hand in game no. 68 the simulator lost 120 hands more than he won.
+The simulator provides the net winnings result per game played and an overall result summing up all the game results. The following output for example indicates, that in game no. 67 the simulated player won 18 dollars more than his starting amount. On the other hand in game no. 68 the simulator lost 120 dollars more than his starting amount.
 
      ...
      WIN for Game no. 67: 18.000000
@@ -54,6 +54,7 @@ The simulator plays with the following casino rules:
 | ------------- |-------------|
 | *GAMES*  | The number of games that should be played |
 | *ROUNDS_PER_GAME*  | The number of rounds that should be played per game (may cover multiple shoes) |
+| *PLAYER_COUNT*  | The number of simulated players at the table (must be in range 1-8) |
 | *SHOE_SIZE*   | The number of decks that are used |
 | *SHOE_PENETRATION*  | Indicates the percentage of cards that still remain in the shoe, when the shoe gets reshuffled |
 | *BET_SPREAD*  | The multiplier for the bet size in a player favorable counting situation |
@@ -61,6 +62,7 @@ The simulator plays with the following casino rules:
 ### Sample Configuration
 
     GAMES = 1
+    PLAYER_COUNT = 6
     ROUNDS = 10
     SHOE_SIZE = 8
     SHOE_PENETRATION = 0.2 # reshuffle after 80% of all cards are played
