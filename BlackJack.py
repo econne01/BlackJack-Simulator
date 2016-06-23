@@ -1,10 +1,11 @@
+import os
 import sys
 from random import shuffle, uniform
 
 from importer.StrategyImporter import StrategyImporter
 
 
-ROUNDS = 1
+ROUNDS = 100
 SHOE_SIZE = 6
 SHOE_PENETRATION = 0.2
 DECK_SIZE = 52.0
@@ -14,6 +15,10 @@ CARDS = {"Ace": 11, "Two": 2, "Three": 3, "Four": 4, "Five": 5, "Six": 6, "Seven
 HARD_STRATEGY = {}
 SOFT_STRATEGY = {}
 PAIR_STRATEGY = {}
+
+
+class IncompleteHandException(Exception):
+    pass
 
 
 class Card(object):
@@ -190,6 +195,32 @@ class Hand(object):
         """
         return len(self.cards)
 
+    def get_winner_status(self, dealer_hand):
+        """
+        Return hand winner status, one of "Win", "Lose" or "Push"
+        """
+        if self.length() < 2 or dealer_hand.length() < 2:
+            raise IncompleteHandException('At least one of these hands has not completed playing')
+
+        status = None
+        if self.surrender or self.busted():
+            status = 'LOSE'
+        elif dealer_hand.busted():
+            status = 'WIN'
+        elif self.blackjack() and not dealer_hand.blackjack():
+            status = 'PUSH'
+        elif not self.blackjack() and dealer_hand.blackjack():
+            status = 'LOSE'
+        elif self.blackjack() and dealer_hand.blackjack():
+            status = 'PUSH'
+        elif dealer_hand.value < self.value:
+            status = 'WIN'
+        elif dealer_hand.value > self.value:
+            status = 'LOSE'
+        elif dealer_hand.value == self.value:
+            status = 'PUSH'
+        return status
+
 
 class Player(object):
     """
@@ -274,23 +305,60 @@ class Dealer(object):
         print "Dealer hitted: %s" %c
 
 
+class DataLogger(object):
+    """
+    Write hand outcome statistics
+    """
+    def __init__(self, filename):
+        current_directory = os.path.dirname(os.path.realpath(__file__))
+        filename = current_directory + '/' + filename
+        self.output_file = open(filename, 'w')
+        self.write_headers()
+
+    def write_headers(self):
+        headers = ['Shoe Id', 'Deal Number','Player','Hand Number',
+                   'Player Cards','Value','Player BJ','Double?','Split?','Bust?',
+                   'Dealer Cards','Dealer Value','Dealer BJ','Dealer Bust?','Outcome']
+        self.output_file.write(','.join(headers) + '\n')
+
+    def log_deal(self, shoe_id, deal_id, players):
+        hand_idx = 0
+        for player_idx, player in enumerate(players):
+            for hand in player.hands:
+                data_row = [shoe_id, deal_id, player_idx, hand_idx,
+                            str(hand), hand.value, hand.blackjack(),
+                            hand.doubled, hand.splithand,hand.busted(),
+                            str(player.dealer_hand), player.dealer_hand.value, player.dealer_hand.blackjack(),
+                            player.dealer_hand.busted(),
+                            hand.get_winner_status(player.dealer_hand)]
+                # Convert data to desired output format (ie, just '' instead of 'False')
+                data_row = [str(elem).strip() for elem in data_row]
+                data_row = [elem if elem != 'False' else '' for elem in data_row]
+                # Write data
+                self.output_file.write(','.join(data_row) + '\n')
+                hand_idx += 1
+
+    def close(self):
+        self.output_file.close()
+
+
 if __name__ == "__main__":
     importer = StrategyImporter(sys.argv[1])
+    data_logger = DataLogger(sys.argv[2])
     HARD_STRATEGY, SOFT_STRATEGY, PAIR_STRATEGY = importer.import_player_strategy()
 
     shoe = Shoe(SHOE_SIZE)
-
-    money = 0.0
+    shoe_iteration = 0
 
     for i in range(ROUNDS):
-        print "############################################################ GAME no. %d ############################################################" % (i + 1)
-
         players = []
         starting_cards = []
         dealer_cards = []
+        #---- Initialize the starting hand for each player ----#
         for index in xrange(PLAYER_COUNT):
             starting_cards.append([])
 
+        #---- Deal for each player and Dealer ----#
         for card_count in xrange(2):
             for index in xrange(PLAYER_COUNT):
                 starting_cards[index].append(shoe.deal())
@@ -305,52 +373,18 @@ if __name__ == "__main__":
                 players.append(Player(player_hand, dealer_hand, shoe))
 
             print "Dealer Hand: %s" % dealer.hand
-            # print "Player Hand: %s\n" % player.hands[0]
 
             for player in players:
                 player.play()
             dealer.play()
-    
-        print ""
-        for hand in player.hands:
-            if not hand.surrender:
-                if hand.busted():
-                    status = "LOST"
-                else:
-                    if dealer.hand.busted():
-                        status = "WON"
-                    elif dealer.hand.value < hand.value:
-                        status = "WON"
-                    elif dealer.hand.value > hand.value:
-                        status = "LOST"
-                    elif dealer.hand.value == hand.value:
-                        status = "PUSH"
-                    if hand.blackjack():
-                        if dealer.hand.blackjack():
-                            status = "PUSH"
-                        else:
-                            status = "WON 3:2"
-            else:
-                status = "SURRENDER"
-    
-            print "Player Hand: %s %s (Value: %d, Busted: %r, BlackJack: %r, Splithand: %r, Soft: %r, Surrender: %r, Doubled: %r)" % (hand, status, hand.value, hand.busted(), hand.blackjack(), hand.splithand, hand.soft(), hand.surrender, hand.doubled)
-        print "Dealer Hand: %s (%d)" % (dealer.hand, dealer.hand.value)
 
-        win = 0.0
-        if status == "LOST":
-            win = -1
-        elif status == "WON":
-            win = 1
-        elif status == "WON 3:2":
-            win = 1.5
-        elif status == "SURRENDER":
-            win = -0.5
-        if hand.doubled: win *= 2
-
-        money += win
+        # ----- Log outcomes -----#
+        data_logger.log_deal(shoe_iteration, i, players)
 
         if shoe.reshuffle:
             print "\nReshuffle Shoe"
+            shoe_iteration += 1
             shoe.reshuffle = False
             shoe.cards = shoe.init_cards()
-    print "WIN %f" % money
+
+    data_logger.close()
