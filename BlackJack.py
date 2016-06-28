@@ -316,14 +316,14 @@ class Player(object):
                 else:
                     flag = 'H'
 
+            if flag == 'S' or (hand.cards[0].name == 'Ace' and hand.splithand):
+                break
+
             if flag == 'H':
                 self.hit(hand)
                 
             if flag == 'P':
                 self.split(hand)
-                
-            if flag == 'S': 
-                break                   
 
     def hit(self, hand):
         c = self.shoe.deal()
