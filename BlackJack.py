@@ -5,16 +5,30 @@ from random import shuffle, uniform
 from importer.StrategyImporter import StrategyImporter
 
 
-ROUNDS = 100
+SHOE_COUNT = 25
 SHOE_SIZE = 6
 SHOE_PENETRATION = 0.2
 DECK_SIZE = 52.0
-PLAYER_COUNT = 6
+PLAYER_COUNT = 1
 CARDS = {"Ace": 11, "Two": 2, "Three": 3, "Four": 4, "Five": 5, "Six": 6, "Seven": 7, "Eight": 8, "Nine": 9, "Ten": 10, "Jack": 10, "Queen": 10, "King": 10}
 
 HARD_STRATEGY = {}
 SOFT_STRATEGY = {}
 PAIR_STRATEGY = {}
+
+
+class HouseRules(object):
+    """
+    List of Blackjack game settings that can vary from casino to casino
+    """
+    # MAX_SPLITS = 3
+    MAX_SPLIT_HANDS = 4
+    HIT_SOFT_17 = True
+    ALLOW_RESPLIT_ACES = False
+    ALLOW_DOUBLE_AFTER_SPLIT = True
+
+
+HOUSE_RULES = HouseRules()
 
 
 class IncompleteHandException(Exception):
@@ -156,7 +170,7 @@ class Hand(object):
         Check a hand for a blackjack.
         """
         if self.value == 21:
-            if self.length() == 2:
+            if self.length() == 2 and not self.splithand:
                 return True
             else:
                 return False
@@ -208,7 +222,7 @@ class Hand(object):
         elif dealer_hand.busted():
             status = 'WIN'
         elif self.blackjack() and not dealer_hand.blackjack():
-            status = 'PUSH'
+            status = 'WIN'
         elif not self.blackjack() and dealer_hand.blackjack():
             status = 'LOSE'
         elif self.blackjack() and dealer_hand.blackjack():
@@ -220,6 +234,28 @@ class Hand(object):
         elif dealer_hand.value == self.value:
             status = 'PUSH'
         return status
+
+    def get_winning_multiplier(self, dealer_hand):
+        """
+        Return hand's winnings multiplier as a decimal
+        @example get_winning_multiplier(<Hand>) => 1.5
+        """
+        winner_status = self.get_winner_status(dealer_hand)
+        multiplier = 0.0
+        if winner_status == 'LOSE' and self.surrender:
+            multiplier = -0.5
+        elif winner_status == 'LOSE':
+            multiplier = -1.0
+        elif winner_status == 'PUSH':
+            multiplier = 0.0
+        elif winner_status == 'WIN' and not self.blackjack():
+            multiplier = 1.0
+        elif winner_status == 'WIN' and self.blackjack():
+            multiplier = 1.5
+
+        if self.doubled:
+            multiplier *= 2
+        return multiplier
 
 
 class Player(object):
@@ -245,7 +281,7 @@ class Player(object):
         while not hand.busted() and not hand.blackjack():
             if hand.soft():
                 flag = SOFT_STRATEGY[hand.value][dealer_hand.cards[0].name]
-            elif hand.splitable():
+            elif hand.splitable() and len(self.hands) < HOUSE_RULES.MAX_SPLIT_HANDS:
                 flag = PAIR_STRATEGY[hand.value][dealer_hand.cards[0].name]
             else:
                 flag = HARD_STRATEGY[hand.value][dealer_hand.cards[0].name]
@@ -318,7 +354,8 @@ class DataLogger(object):
     def write_headers(self):
         headers = ['Shoe Id', 'Deal Number','Player','Hand Number',
                    'Player Cards','Value','Player BJ','Double?','Split?','Bust?',
-                   'Dealer Cards','Dealer Value','Dealer BJ','Dealer Bust?','Outcome']
+                   'Dealer Cards','Dealer Value','Dealer BJ','Dealer Bust?',
+                   'Outcome','Multiplier']
         self.output_file.write(','.join(headers) + '\n')
 
     def log_deal(self, shoe_id, deal_id, players):
@@ -330,7 +367,8 @@ class DataLogger(object):
                             hand.doubled, hand.splithand,hand.busted(),
                             str(player.dealer_hand), player.dealer_hand.value, player.dealer_hand.blackjack(),
                             player.dealer_hand.busted(),
-                            hand.get_winner_status(player.dealer_hand)]
+                            hand.get_winner_status(player.dealer_hand),
+                            hand.get_winning_multiplier(player.dealer_hand)]
                 # Convert data to desired output format (ie, just '' instead of 'False')
                 data_row = [str(elem).strip() for elem in data_row]
                 data_row = [elem if elem != 'False' else '' for elem in data_row]
@@ -349,8 +387,9 @@ if __name__ == "__main__":
 
     shoe = Shoe(SHOE_SIZE)
     shoe_iteration = 0
+    deal_iteration = 0
 
-    for i in range(ROUNDS):
+    while shoe_iteration < SHOE_COUNT:
         players = []
         starting_cards = []
         dealer_cards = []
@@ -365,21 +404,21 @@ if __name__ == "__main__":
             dealer_cards.append(shoe.deal())
 
         dealer_hand = Hand(dealer_cards)
+        dealer = Dealer(dealer_hand, shoe)
+        print "Dealer Hand: %s" % dealer.hand
+        for index in xrange(PLAYER_COUNT):
+            player_hand = Hand(starting_cards[index])
+            players.append(Player(player_hand, dealer_hand, shoe))
+
         if not dealer_hand.blackjack():
             # Play only continues if dealer does not have Blackjack
-            dealer = Dealer(dealer_hand, shoe)
-            for index in xrange(PLAYER_COUNT):
-                player_hand = Hand(starting_cards[index])
-                players.append(Player(player_hand, dealer_hand, shoe))
-
-            print "Dealer Hand: %s" % dealer.hand
-
             for player in players:
                 player.play()
             dealer.play()
 
         # ----- Log outcomes -----#
-        data_logger.log_deal(shoe_iteration, i, players)
+        data_logger.log_deal(shoe_iteration, deal_iteration, players)
+        deal_iteration += 1
 
         if shoe.reshuffle:
             print "\nReshuffle Shoe"
