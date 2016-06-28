@@ -5,11 +5,11 @@ from random import shuffle, uniform
 from importer.StrategyImporter import StrategyImporter
 
 
-SHOE_COUNT = 25
+SHOE_COUNT = 50
 SHOE_SIZE = 6
 SHOE_PENETRATION = 0.2
 DECK_SIZE = 52.0
-PLAYER_COUNT = 1
+PLAYER_COUNT = 6
 CARDS = {"Ace": 11, "Two": 2, "Three": 3, "Four": 4, "Five": 5, "Six": 6, "Seven": 7, "Eight": 8, "Nine": 9, "Ten": 10, "Jack": 10, "Queen": 10, "King": 10}
 
 HARD_STRATEGY = {}
@@ -165,6 +165,11 @@ class Hand(object):
         else:
             return False
 
+    def can_double(self):
+        return (self.length() == 2 and
+                ((self.splithand and self.cards[0].value not in [10, 11])
+                 or not self.splithand))
+
     def blackjack(self):
         """
         Check a hand for a blackjack.
@@ -272,6 +277,11 @@ class Player(object):
             print "Playing Hand: %s" % hand
             self.play_hand(hand)
 
+    def can_split(self, hand):
+        return (hand.splitable() and
+                len(self.hands) < HOUSE_RULES.MAX_SPLIT_HANDS and
+                (len(self.hands) == 1 or len(hand.aces) < 2))
+
     def play_hand(self, hand):
         if hand.length() < 2:
             if hand.cards[0].name == "Ace":
@@ -279,15 +289,18 @@ class Player(object):
             self.hit(hand)
 
         while not hand.busted() and not hand.blackjack():
-            if hand.soft():
+            if self.can_split(hand):
+                if len(hand.aces) == 2:
+                    flag = PAIR_STRATEGY[22][dealer_hand.cards[0].name]
+                else:
+                    flag = PAIR_STRATEGY[hand.value][dealer_hand.cards[0].name]
+            elif hand.soft():
                 flag = SOFT_STRATEGY[hand.value][dealer_hand.cards[0].name]
-            elif hand.splitable() and len(self.hands) < HOUSE_RULES.MAX_SPLIT_HANDS:
-                flag = PAIR_STRATEGY[hand.value][dealer_hand.cards[0].name]
             else:
                 flag = HARD_STRATEGY[hand.value][dealer_hand.cards[0].name]
 
             if flag == 'D':
-                if hand.length() == 2:
+                if hand.can_double():
                     print "Double Down"
                     hand.doubled = True
                     self.hit(hand)

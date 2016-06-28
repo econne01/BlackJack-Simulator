@@ -15,7 +15,7 @@ class StrategyImporter(object):
     def import_player_strategy(self):
         hard = 21
         soft = 21
-        pair = 20
+        pair = 22
 
         with open(self.player_file, 'rU') as player_csv:
             reader = csv.DictReader(player_csv, delimiter = ',')
