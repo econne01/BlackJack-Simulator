@@ -144,6 +144,14 @@ class Hand(object):
         else:
             return False
 
+    def can_double(self):
+        """
+        Determines whether it is permitted to double down on this hand
+        """
+        return (self.length() == 2 and
+                ((self.splithand and self.cards[0].value not in [10, 11])
+                 or not self.splithand))
+
     def blackjack(self):
         """
         Check a hand for a blackjack. Note: 3x7 is also counted as a blackjack.
